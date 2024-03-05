@@ -1,0 +1,32 @@
+{{- $labels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.global.labels
+-}}
+{{- $annotations :=
+  .Values.global.annotations
+-}}
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: {{ include "name" . }}
+  namespace: {{ .Release.Namespace }}
+  {{- with $labels }}
+  labels:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+  {{- with $annotations }}
+  annotations:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  selector: {{- include "selectorLabels" . | nindent 4 }}
+  ports:
+    - name: rclone
+      port: 5572
+      targetPort: rclone

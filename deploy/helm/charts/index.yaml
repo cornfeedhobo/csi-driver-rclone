@@ -1,0 +1,17 @@
+apiVersion: v1
+entries:
+  csi-driver-rclone:
+  - apiVersion: v2
+    appVersion: v1.0.0
+    created: "2024-03-05T17:05:48.845038899-06:00"
+    description: rclone csi driver, packaged for k8s
+    digest: 56e3fde7416ef48c849e30116b8f9189e9b9af8bfb9c5e79c85a65ed37c791c4
+    icon: https://upload.wikimedia.org/wikipedia/commons/e/e4/Rclone_wide_logo.svg
+    name: csi-driver-rclone
+    sources:
+    - https://github.com/cornfeedhobo/csi-driver-rclone
+    type: application
+    urls:
+    - csi-driver-rclone-v1.0.0.tgz
+    version: v1.0.0
+generated: "2024-03-05T17:05:48.844431415-06:00"

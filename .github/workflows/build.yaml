@@ -1,0 +1,39 @@
+name: Build
+
+on: [push]
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out ${{ github.repository }}
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install needed packages
+        run: |
+          sudo sh -c '
+            apt update
+            apt install -y fuse3
+            echo "user_allow_other" >> /etc/fuse.conf
+          '
+
+      - name: Set up Go, using the version from go.mod
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run go test and build
+        run: |
+          export PATH=$PATH:$HOME/.local/bin
+          go version
+          make container \
+            "GO_ARCH=amd64 arm arm64" \
+            "GO_OS=linux"
