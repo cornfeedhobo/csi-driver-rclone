@@ -1,0 +1,32 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/go
+{
+	"name": "Go",
+	"image": "mcr.microsoft.com/devcontainers/go:1-1.21-bookworm",
+	"features": {
+		"ghcr.io/devcontainers/features/kubectl-helm-minikube": "latest",
+		"ghcr.io/devcontainers-contrib/features/shfmt": "latest",
+		"ghcr.io/lukewiwa/features/shellcheck": "stable"
+	},
+	"privileged": true,
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"golang.go",
+				"mkhl.shfmt",
+				"ms-kubernetes-tools.vscode-kubernetes-tools",
+				"redhat.vscode-yaml",
+				"Tim-Koehler.helm-intellisense",
+				"timonwong.shellcheck"
+			]
+		}
+	},
+	"runArgs": [
+		"--device=/dev/fuse",
+		"--cap-add=SYS_ADMIN",
+		"--security-opt=apparmor:unconfined"
+	],
+	"postCreateCommand": ".devcontainer/init.sh",
+	"workspaceFolder": "${localWorkspaceFolder}",
+	"workspaceMount": "source=${localWorkspaceFolder},target=${localWorkspaceFolder},type=bind"
+}

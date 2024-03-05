@@ -1,0 +1,10 @@
+{
+	"recommendations": [
+		"golang.go",
+		"mkhl.shfmt",
+		"ms-kubernetes-tools.vscode-kubernetes-tools",
+		"redhat.vscode-yaml",
+		"Tim-Koehler.helm-intellisense",
+		"timonwong.shellcheck"
+	]
+}

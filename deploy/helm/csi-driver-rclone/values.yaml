@@ -1,0 +1,143 @@
+---
+global:
+  # -- Additional labels.
+  labels: {}
+  # -- Additional annotations.
+  annotations: {}
+
+
+# CSI Driver
+csi:
+  # -- The name of the driver.
+  driverName: "rclone.csi.k8s.io"
+  # -- The name for the created StorageClass resource,
+  # allowing this driver to handle dynamic provisioning.
+  storageClassName: "rclone"
+
+
+# PVC details
+pvc:
+  # -- This PVC can be created manually before chart installation. Always required.
+  name: "rclone-config"
+  # -- Create the PVC as part of this helm chart.
+  # Warning, this also means the volume will be deleted when this chart is uninstalled.
+  # Note, you can populate the volume using a temporary pod with the created PVC mounted.
+  create: false
+  # -- Additional labels.
+  labels: {}
+  # -- Additional annotations.
+  annotations: {}
+  # -- The storage class backing the shared rclone pvc. Required if creating.
+  # Must support ReadWriteMany, e.g. configStorageClass: "nfs".
+  # DO NOT set to 'rclone'.
+  storageClass: ""
+
+
+# CSI Node Server
+daemonset:
+  # -- Additional labels.
+  labels: {}
+  # -- Additional annotations.
+  annotations: {}
+  # -- Daemonset update strategy.
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
+  # -- Node selector.
+  nodeSelector:
+    kubernetes.io/os: linux
+  # Pod settings
+  pod:
+    # -- Additional labels.
+    labels: {}
+    # -- Additional annotations.
+    annotations: {}
+
+
+# CSI Controller Server
+deployment:
+  # -- Additional labels.
+  labels: {}
+  # -- Additional annotations.
+  annotations: {}
+  # -- Node selector.
+  nodeSelector:
+    # add "kubernetes.io/role: master" to run controller on master node
+    kubernetes.io/os: linux
+  # -- Replica count.
+  # The driver supports leadership elections,
+  # meaning multiple controllers should work, but remains untested.
+  replicas: 1
+  # Pod settings
+  pod:
+    # -- Additional labels.
+    labels: {}
+    # -- Additional annotations.
+    annotations: {}
+
+
+# Container settings, applied to deployment and daemon container definitions.
+containers:
+
+  rclone:
+    image:
+      repo: bitnami/rclone
+      tag: latest
+      pullPolicy: IfNotPresent
+    resources: {}
+    verbosity: 1
+
+  driver:
+    image:
+      repo: ghcr.io/cornfeedhobo/csi-driver-rclone
+      tag: ""
+      pullPolicy: IfNotPresent
+    resources:
+      limits:
+        memory: 300Mi
+      requests:
+        cpu: 10m
+        memory: 20Mi
+    remote: ""
+    verbosity: 1
+    args: []
+
+  provisioner:
+    image:
+      repo: registry.k8s.io/sig-storage/csi-provisioner
+      tag: v4.0.0
+      pullPolicy: IfNotPresent
+    resources:
+      limits:
+        memory: 400Mi
+      requests:
+        cpu: 10m
+        memory: 20Mi
+    verbosity: 1
+
+  liveness:
+    image:
+      repo: registry.k8s.io/sig-storage/livenessprobe
+      tag: v2.12.0
+      pullPolicy: IfNotPresent
+    resources:
+      limits:
+        memory: 100Mi
+      requests:
+        cpu: 10m
+        memory: 20Mi
+    verbosity: 1
+
+  registrar:
+    image:
+      repo: registry.k8s.io/sig-storage/csi-node-driver-registrar
+      tag: v2.10.0
+      pullPolicy: IfNotPresent
+    resources:
+      limits:
+        memory: 100Mi
+      requests:
+        cpu: 10m
+        memory: 20Mi
+    verbosity: 1

@@ -1,0 +1,146 @@
+{{- $deployLabels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.deployment.labels
+  .Values.global.labels
+-}}
+{{- $podLabels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.deployment.pod.labels
+  .Values.global.labels
+-}}
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ include "name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: "controller"
+    {{- range $k, $v := $deployLabels }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: "controller"
+      {{- include "selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: "controller"
+        {{- range $k, $v := $podLabels }}
+        {{ $k }}: {{ quote $v }}
+        {{- end }}
+    spec:
+      containers:
+        - name: driver
+          image: {{ print .Values.containers.driver.image.repo ":" (.Values.containers.driver.image.tag | default .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.containers.driver.image.pullPolicy }}
+          {{- with .Values.containers.driver.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            # used for the driver to write metadata files,
+            # that the daemonset will then upload
+            - name: rclone-pvc
+              mountPath: /tmp/rclone.csi.k8s.io
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DRIVER_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DRIVER_NAME
+              value: {{ .Values.csi.driverName }}
+            - name: RCD_ADDRESS
+              value: http://{{ include "name" . }}:5572/
+            - name: RCLONE_REMOTE
+              value: {{ .Values.containers.driver.remote | required "containers.driver.remote is required" }}
+          args:
+            - "--node-id=$(NODE_ID)"
+            - "--driver-endpoint=$(DRIVER_ENDPOINT)"
+            - "--driver-name=$(DRIVER_NAME)"
+            - "--rcd-address=$(RCD_ADDRESS)"
+            - "--remote=$(RCLONE_REMOTE)"
+            - "-v={{ .Values.containers.driver.verbosity }}"
+            {{- range .Values.containers.driver.args }}
+            - {{ quote . }}
+            {{- end }}
+        - name: liveness
+          image: {{ print .Values.containers.liveness.image.repo ":" .Values.containers.liveness.image.tag }}
+          imagePullPolicy: {{ .Values.containers.liveness.image.pullPolicy }}
+          {{- with .Values.containers.liveness.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          env:
+            - name: CSI_SOCK
+              value: /csi/csi.sock
+          args:
+            - --csi-address=$(CSI_SOCK)
+            - --probe-timeout=3s
+            - --health-port=29662
+            - -v={{ .Values.containers.liveness.verbosity }}
+          ports:
+            - containerPort: 29662
+              name: healthz
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 1
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            failureThreshold: 5
+            periodSeconds: 30
+            timeoutSeconds: 10
+        - name: provisioner
+          image: {{ print .Values.containers.provisioner.image.repo ":" .Values.containers.provisioner.image.tag }}
+          imagePullPolicy: {{ .Values.containers.provisioner.image.pullPolicy }}
+          {{- with .Values.containers.provisioner.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          env:
+            - name: CSI_SOCK
+              value: /csi/csi.sock
+          args:
+            - --csi-address=$(CSI_SOCK)
+            - --leader-election
+            - --leader-election-namespace={{ .Release.Namespace }}
+            - --extra-create-metadata=true
+            - --timeout=1200s
+            - -v={{ .Values.containers.provisioner.verbosity }}
+      {{- with .Values.deployment.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      priorityClassName: system-cluster-critical
+      serviceAccountName: {{ include "name" . }}
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/controlplane
+          operator: Exists
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      volumes:
+        - name: socket-dir
+          emptyDir: {}
+        - name: rclone-pvc
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvc.name }}

@@ -1,0 +1,230 @@
+{{- $daemonLabels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.daemonset.labels
+  .Values.global.labels
+-}}
+{{- $daemonAnnotations := merge
+  .Values.daemonset.annotations
+  .Values.global.annotations
+-}}
+{{- $podLabels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.daemonset.pod.labels
+  .Values.global.labels
+-}}
+{{- $podAnnotations := merge
+  .Values.daemonset.pod.annotations
+  .Values.global.annotations
+-}}
+---
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: {{ include "name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/component: "nodeserver"
+    {{- range $k, $v := $daemonLabels }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- with $daemonAnnotations }}
+  annotations:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: "nodeserver"
+      {{- include "selectorLabels" . | nindent 6 }}
+  updateStrategy: {{- toYaml .Values.daemonset.updateStrategy | nindent 4 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: "nodeserver"
+        {{- range $k, $v := $podLabels }}
+        {{ $k }}: {{ quote $v }}
+        {{- end }}
+    spec:
+      containers:
+        - name: rclone
+          image: {{ print .Values.containers.rclone.image.repo ":" .Values.containers.rclone.image.tag }}
+          imagePullPolicy: {{ .Values.containers.rclone.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: true
+            capabilities:
+              add:
+                - SYS_ADMIN
+            privileged: true
+            runAsUser: 0
+            runAsGroup: 0
+          {{- with .Values.containers.rclone.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: rclone-pvc
+              mountPath: /root/.config/rclone
+            - name: rclone-pvc
+              mountPath: /tmp/rclone.csi.k8s.io
+            - name: rclone-cache
+              mountPath: /root/.cache
+            - name: rclone-fuse
+              mountPath: /dev/fuse
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
+          env:
+            - name: HOME
+              value: /root
+          args:
+            - rcd
+            - --rc-addr=0.0.0.0:5572
+            - --rc-no-auth
+            - --rc-web-gui
+            - --rc-web-gui-no-open-browser
+            - --verbose=2
+          ports:
+            - name: rclone
+              containerPort: 5572
+              protocol: TCP
+        - name: driver
+          image: {{ print .Values.containers.driver.image.repo ":" (.Values.containers.driver.image.tag | default .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.containers.driver.image.pullPolicy }}
+          securityContext:
+            privileged: true
+          {{- with .Values.containers.driver.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: pods-mount-dir
+              mountPath: /var/lib/kubelet/pods
+              mountPropagation: "Bidirectional"
+          env:
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DRIVER_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: DRIVER_NAME
+              value: {{ .Values.csi.driverName }}
+            - name: RCD_ADDRESS
+              value: http://{{ include "name" . }}:5572/
+            - name: RCLONE_REMOTE
+              value: {{ .Values.containers.driver.remote | required "containers.driver.remote is required" }}
+          args:
+            - "--node-id=$(NODE_ID)"
+            - "--driver-endpoint=$(DRIVER_ENDPOINT)"
+            - "--driver-name=$(DRIVER_NAME)"
+            - "--rcd-address=$(RCD_ADDRESS)"
+            - "--remote=$(RCLONE_REMOTE)"
+            - "-v={{ .Values.containers.driver.verbosity }}"
+            {{- range .Values.containers.driver.args }}
+            - {{ quote . }}
+            {{- end }}
+        - name: liveness
+          image: {{ print .Values.containers.liveness.image.repo ":" .Values.containers.liveness.image.tag }}
+          imagePullPolicy: {{ .Values.containers.liveness.image.pullPolicy }}
+          {{- with .Values.containers.liveness.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+          env:
+            - name: CSI_SOCK
+              value: /csi/csi.sock
+          args:
+            - --csi-address=$(CSI_SOCK)
+            - --probe-timeout=3s
+            - --health-port=29663
+            - --v=2
+          ports:
+            - containerPort: 29663
+              name: healthz
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 1
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: healthz
+            failureThreshold: 5
+            periodSeconds: 30
+            timeoutSeconds: 10
+        - name: registrar
+          image: {{ print .Values.containers.registrar.image.repo ":" .Values.containers.registrar.image.tag }}
+          imagePullPolicy: {{ .Values.containers.registrar.image.pullPolicy }}
+          {{- with .Values.containers.registrar.resources }}
+          resources: {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: socket-dir
+              mountPath: /csi
+            - name: registration-dir
+              mountPath: /registration
+          env:
+            - name: CSI_SOCK
+              value: /csi/csi.sock
+            - name: DRIVER_REG_SOCK_PATH
+              value: /var/lib/kubelet/plugins/{{ include "name" . }}/csi.sock
+          args:
+            - --csi-address=$(CSI_SOCK)
+            - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+            - --v={{ .Values.containers.registrar.verbosity }}
+          readinessProbe:
+            exec:
+              command:
+                - /csi-node-driver-registrar
+                - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+                - --mode=kubelet-registration-probe
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - /csi-node-driver-registrar
+                - --kubelet-registration-path=$(DRIVER_REG_SOCK_PATH)
+                - --mode=kubelet-registration-probe
+            failureThreshold: 5
+            periodSeconds: 30
+            timeoutSeconds: 10
+      {{- with .Values.daemonset.nodeSelector }}
+      nodeSelector: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      priorityClassName: system-node-critical
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: {{ include "name" . }}
+      tolerations:
+        - operator: Exists
+      volumes:
+        - name: socket-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/{{ include "name" . }}
+            type: DirectoryOrCreate
+        - name: registration-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+        - name: pods-mount-dir
+          hostPath:
+            path: /var/lib/kubelet/pods
+            type: Directory
+        - name: rclone-fuse
+          hostPath:
+            path: /dev/fuse
+        - name: rclone-cache
+          emptyDir:
+            medium: Memory
+        - name: rclone-pvc
+          persistentVolumeClaim:
+            claimName: {{ .Values.pvc.name }}

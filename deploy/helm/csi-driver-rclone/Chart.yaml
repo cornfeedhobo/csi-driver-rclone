@@ -1,0 +1,12 @@
+# Chart details
+type: application
+apiVersion: v2
+version: v0.0.0
+
+name: csi-driver-rclone
+appVersion: v0.0.0
+
+description: rclone csi driver, packaged for k8s
+icon: https://upload.wikimedia.org/wikipedia/commons/e/e4/Rclone_wide_logo.svg
+sources:
+  - https://github.com/cornfeedhobo/csi-driver-rclone

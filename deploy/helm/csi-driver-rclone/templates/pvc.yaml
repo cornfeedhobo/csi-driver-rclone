@@ -1,0 +1,35 @@
+{{- if .Values.pvc.create }}
+{{- $labels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.pvc.labels
+  .Values.global.labels
+-}}
+{{- $annotations := merge
+  .Values.pvc.annotations
+  .Values.global.annotations
+-}}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ .Values.pvc.name }}
+  namespace: {{ .Release.Namespace }}
+  {{- with $labels }}
+  labels:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+  {{- with $annotations }}
+  annotations:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+spec:
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 10Mi
+  storageClassName: {{ .Values.pvc.storageClass }}
+{{- end }}

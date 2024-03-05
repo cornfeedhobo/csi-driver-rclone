@@ -1,0 +1,36 @@
+{{ template "chart.header" . }}
+{{ template "chart.description" . }}
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+## Installing the Chart
+
+## Config PVC
+
+`rclone` likes to manage it's own config. This chart requires a ReadWriteMany PVC
+to store this config and make it available to all instance of the DaemonSet.
+
+An example PVC and Pod are included with this chart:
+
+```bash
+kubectl -n kube-system apply -f rclone-config.yaml
+kubectl -n kube-system exec --tty rclone-config
+# use this shell session to write your rclone config, then delete the pod
+kubectl -n kube-system delete pod rclone-config
+```
+
+## Helm Chart
+
+```bash
+helm repo add csi-driver-rclone https://raw.githubusercontent.com/cornfeedhobo/csi-driver-rclone/master/deploy/helm/charts
+helm template csi-driver-rclone/csi-driver-rclone \
+  --set "containers.driver.remote=myrcloneremote:/k8s/basepath"
+```
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}
+
+---
+
+Generated with [`helm-docs -s file`](https://github.com/norwoodj/helm-docs)

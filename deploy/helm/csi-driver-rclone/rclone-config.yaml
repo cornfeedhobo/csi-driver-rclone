@@ -1,0 +1,31 @@
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: rclone-config
+spec:
+  accessModes: ["ReadWriteMany"]
+  resources:
+    requests:
+      storage: 10Mi
+  ## This is an example. Change to fit your environment.
+  storageClassName: nfs
+---
+kind: Pod
+apiVersion: v1
+metadata:
+  name: rclone-config
+spec:
+  containers:
+    - name: bash
+      image: bash
+      imagePullPolicy: IfNotPresent
+      resources: {}
+      tty: true
+      volumeMounts:
+        - name: rclone-config
+          mountPath: /rclone-config
+  volumes:
+    - name: rclone-config
+      persistentVolumeClaim:
+        claimName: rclone-config

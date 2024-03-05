@@ -1,0 +1,25 @@
+{{- $labels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.global.labels
+-}}
+{{- $annotations :=
+  .Values.global.annotations
+-}}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: {{ .Values.csi.storageClassName }}
+  {{- with $labels }}
+  labels:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+  {{- with $annotations }}
+  annotations:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+provisioner: {{ .Values.csi.driverName }}

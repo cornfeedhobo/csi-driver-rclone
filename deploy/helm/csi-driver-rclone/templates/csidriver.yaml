@@ -1,0 +1,29 @@
+{{- $labels := merge
+  (fromYaml (include "commonLabels" $))
+  .Values.global.labels
+-}}
+{{- $annotations :=
+  .Values.global.annotations
+-}}
+---
+kind: CSIDriver
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: {{ .Values.csi.driverName }}
+  {{- with $labels }}
+  labels:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+  {{- with $annotations }}
+  annotations:
+    {{- range $k, $v := . }}
+    {{ $k }}: {{ quote $v }}
+    {{- end }}
+  {{- end }}
+spec:
+  attachRequired: false
+  fsGroupPolicy: File
+  volumeLifecycleModes:
+    - Persistent
